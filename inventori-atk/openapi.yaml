@@ -1,0 +1,461 @@
+openapi: 3.1.0
+info:
+  title: Layanan Inventori ATK — PT Ina Nata Boga
+  version: 1.0.0
+  contact:
+    name: Tim Proyek Inventori ATK
+    email: inventori@inanataboga.test
+  description: |
+    Kontrak API untuk mengelola barang ATK, menyesuaikan stok, serta mengajukan
+    dan menyetujui permintaan ATK di gudang Purchasing PT Ina Nata Boga.
+    Dipakai oleh petugas gudang/Purchasing dan Modul Permintaan ATK.
+    Semua galat dikembalikan dalam format Problem Details (RFC 9457).
+servers:
+  - url: http://localhost/api
+    description: Lingkungan lokal (Laravel Sail)
+tags:
+  - name: Barang
+    description: Data barang ATK dan stoknya
+  - name: Permintaan
+    description: Permintaan ATK dari bagian atau karyawan
+paths:
+  /v1/barang:
+    get:
+      tags: [Barang]
+      operationId: daftarBarang
+      summary: Menampilkan daftar barang ATK
+      description: Mengembalikan seluruh barang, diurutkan menurut kode.
+      responses:
+        '200':
+          description: Daftar barang
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DaftarBarang'
+    post:
+      tags: [Barang]
+      operationId: tambahBarang
+      summary: Menambah barang ATK baru
+      description: |
+        Stok awal barang baru adalah 0 bila field `stok` tidak dikirim.
+        Kode barang harus unik dan berformat tiga huruf, tanda hubung, tiga angka.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TambahBarang'
+      responses:
+        '201':
+          description: Barang berhasil ditambahkan
+          headers:
+            Location:
+              description: Alamat barang yang baru dibuat
+              schema:
+                type: string
+                format: uri
+                example: http://localhost/api/v1/barang/ATK-010
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BarangTunggal'
+        '422':
+          $ref: '#/components/responses/ValidasiGagal'
+  /v1/barang/{kode}:
+    parameters:
+      - $ref: '#/components/parameters/Kode'
+    get:
+      tags: [Barang]
+      operationId: detailBarang
+      summary: Menampilkan satu barang berdasarkan kode
+      description: Mengembalikan 404 dalam format Problem Details bila kode tidak ada.
+      responses:
+        '200':
+          description: Detail barang
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BarangTunggal'
+        '404':
+          $ref: '#/components/responses/TidakDitemukan'
+  /v1/barang/{kode}/penyesuaian-stok:
+    parameters:
+      - $ref: '#/components/parameters/Kode'
+    post:
+      tags: [Barang]
+      operationId: sesuaikanStok
+      summary: Menambah atau mengurangi stok satu barang
+      description: |
+        Nilai `perubahan` positif menambah stok (barang masuk), negatif mengurangi
+        stok (barang keluar). Stok tidak boleh menjadi negatif. Setiap penyesuaian
+        tercatat pada riwayat stok.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PenyesuaianStok'
+      responses:
+        '200':
+          description: Stok berhasil disesuaikan
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BarangTunggal'
+        '404':
+          $ref: '#/components/responses/TidakDitemukan'
+        '409':
+          description: Stok tidak cukup untuk pengurangan yang diminta
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://inventori-atk.test/problem/stok-tidak-cukup
+                title: Stok tidak cukup
+                status: 409
+                detail: Stok ATK-001 tinggal 3, tidak bisa dikurangi 5.
+                instance: /api/v1/barang/ATK-001/penyesuaian-stok
+                stok_tersedia: 3
+        '422':
+          $ref: '#/components/responses/ValidasiGagal'
+  /v1/permintaan:
+    post:
+      tags: [Permintaan]
+      operationId: ajukanPermintaan
+      summary: Mengajukan permintaan ATK
+      description: |
+        Membuat permintaan baru berstatus `diajukan`. Satu permintaan memuat satu
+        jenis barang. Pengajuan tidak mengurangi stok; stok baru berkurang saat
+        permintaan disetujui. Mengembalikan 404 bila kode barang tidak ada.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AjukanPermintaan'
+      responses:
+        '201':
+          description: Permintaan berhasil diajukan
+          headers:
+            Location:
+              description: Alamat permintaan yang baru dibuat
+              schema:
+                type: string
+                format: uri
+                example: http://localhost/api/v1/permintaan/PRM-0001
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PermintaanTunggal'
+        '404':
+          description: Kode barang yang diminta tidak ada
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://inventori-atk.test/problem/barang-tidak-ditemukan
+                title: Barang tidak ditemukan
+                status: 404
+                detail: Barang dengan kode ATK-999 tidak ada.
+                instance: /api/v1/permintaan
+        '422':
+          $ref: '#/components/responses/ValidasiGagal'
+  /v1/permintaan/{nomor}:
+    parameters:
+      - $ref: '#/components/parameters/Nomor'
+    get:
+      tags: [Permintaan]
+      operationId: detailPermintaan
+      summary: Menampilkan satu permintaan berdasarkan nomor
+      description: Mengembalikan 404 dalam format Problem Details bila nomor tidak ada.
+      responses:
+        '200':
+          description: Detail permintaan
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PermintaanTunggal'
+        '404':
+          $ref: '#/components/responses/TidakDitemukan'
+  /v1/permintaan/{nomor}/persetujuan:
+    parameters:
+      - $ref: '#/components/parameters/Nomor'
+    post:
+      tags: [Permintaan]
+      operationId: setujuiPermintaan
+      summary: Menyetujui permintaan ATK
+      description: |
+        Mengubah status permintaan dari `diajukan` menjadi `disetujui` dan
+        mengurangi stok barang sebesar jumlah yang diminta, dalam satu transaksi.
+        Ditolak dengan 409 bila stok tidak cukup atau permintaan sudah diproses;
+        pada kedua kasus itu stok dan status tidak berubah.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PersetujuanPermintaan'
+      responses:
+        '200':
+          description: Permintaan disetujui dan stok dikurangi
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PermintaanTunggal'
+        '404':
+          $ref: '#/components/responses/TidakDitemukan'
+        '409':
+          description: |
+            Permintaan tidak dapat disetujui: stok tidak cukup, atau permintaan
+            sudah pernah disetujui.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                stokTidakCukup:
+                  summary: Stok tidak cukup
+                  value:
+                    type: https://inventori-atk.test/problem/stok-tidak-cukup
+                    title: Stok tidak cukup
+                    status: 409
+                    detail: Stok ATK-001 tinggal 3, tidak bisa dikurangi 5.
+                    instance: /api/v1/permintaan/PRM-0001/persetujuan
+                    stok_tersedia: 3
+                sudahDiproses:
+                  summary: Permintaan sudah diproses
+                  value:
+                    type: https://inventori-atk.test/problem/permintaan-sudah-diproses
+                    title: Permintaan sudah diproses
+                    status: 409
+                    detail: Permintaan PRM-0001 sudah berstatus disetujui.
+                    instance: /api/v1/permintaan/PRM-0001/persetujuan
+        '422':
+          $ref: '#/components/responses/ValidasiGagal'
+components:
+  parameters:
+    Kode:
+      name: kode
+      in: path
+      required: true
+      description: Kode barang, tiga huruf, tanda hubung, tiga angka
+      schema:
+        type: string
+        pattern: '^[A-Z]{3}-[0-9]{3}$'
+        example: ATK-001
+    Nomor:
+      name: nomor
+      in: path
+      required: true
+      description: Nomor permintaan ATK
+      schema:
+        type: string
+        pattern: '^PRM-[0-9]{4,}$'
+        example: PRM-0001
+  responses:
+    TidakDitemukan:
+      description: Sumber daya tidak ditemukan
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+          example:
+            type: https://inventori-atk.test/problem/tidak-ditemukan
+            title: Sumber daya tidak ditemukan
+            status: 404
+            detail: Tidak ada sumber daya pada alamat ini.
+            instance: /api/v1/barang/XXX-999
+    ValidasiGagal:
+      description: Isi permintaan tidak sesuai kontrak
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemValidasi'
+          example:
+            type: https://inventori-atk.test/problem/validasi-gagal
+            title: Isi permintaan tidak valid
+            status: 422
+            detail: Satu atau lebih field tidak memenuhi kontrak.
+            instance: /api/v1/barang
+            errors:
+              nama:
+                - Field nama wajib diisi.
+  schemas:
+    Barang:
+      type: object
+      required: [kode, nama, satuan, stok, stok_minimum, diperbarui_pada]
+      properties:
+        kode:
+          type: string
+          example: ATK-001
+        nama:
+          type: string
+          example: Kertas A4 80 gram
+        satuan:
+          type: string
+          enum: [pcs, rim, box]
+          example: rim
+        stok:
+          type: integer
+          minimum: 0
+          example: 12
+        stok_minimum:
+          type: integer
+          minimum: 0
+          description: Batas stok menipis; stok kurang dari atau sama dengan angka ini perlu diperhatikan
+          example: 5
+        diperbarui_pada:
+          type: string
+          format: date-time
+    BarangTunggal:
+      type: object
+      required: [data]
+      properties:
+        data:
+          $ref: '#/components/schemas/Barang'
+    DaftarBarang:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Barang'
+    TambahBarang:
+      type: object
+      required: [kode, nama, satuan, stok_minimum]
+      properties:
+        kode:
+          type: string
+          pattern: '^[A-Z]{3}-[0-9]{3}$'
+          example: ATK-010
+        nama:
+          type: string
+          maxLength: 120
+          example: Spidol Whiteboard Hitam
+        satuan:
+          type: string
+          enum: [pcs, rim, box]
+          example: pcs
+        stok_minimum:
+          type: integer
+          minimum: 0
+          example: 5
+        stok:
+          type: integer
+          minimum: 0
+          default: 0
+          description: Stok awal; bernilai 0 bila tidak dikirim
+          example: 0
+    PenyesuaianStok:
+      type: object
+      required: [perubahan, alasan]
+      properties:
+        perubahan:
+          type: integer
+          not:
+            const: 0
+          example: -2
+        alasan:
+          type: string
+          enum: [barang_masuk, barang_keluar, koreksi]
+          example: barang_keluar
+    Permintaan:
+      type: object
+      required: [nomor, kode_barang, jumlah, pemohon, bagian, status, diperbarui_pada]
+      properties:
+        nomor:
+          type: string
+          example: PRM-0001
+        kode_barang:
+          type: string
+          example: ATK-001
+        jumlah:
+          type: integer
+          minimum: 1
+          example: 2
+        pemohon:
+          type: string
+          example: Budi Santoso
+        bagian:
+          type: string
+          example: Finance
+        status:
+          type: string
+          enum: [diajukan, disetujui]
+          example: diajukan
+        disetujui_oleh:
+          type: [string, 'null']
+          description: Nama petugas yang menyetujui; null selama belum disetujui
+          example: null
+        diperbarui_pada:
+          type: string
+          format: date-time
+    PermintaanTunggal:
+      type: object
+      required: [data]
+      properties:
+        data:
+          $ref: '#/components/schemas/Permintaan'
+    AjukanPermintaan:
+      type: object
+      required: [pemohon, bagian, kode_barang, jumlah]
+      properties:
+        pemohon:
+          type: string
+          maxLength: 120
+          example: Budi Santoso
+        bagian:
+          type: string
+          maxLength: 80
+          example: Finance
+        kode_barang:
+          type: string
+          pattern: '^[A-Z]{3}-[0-9]{3}$'
+          example: ATK-001
+        jumlah:
+          type: integer
+          minimum: 1
+          example: 2
+    PersetujuanPermintaan:
+      type: object
+      required: [disetujui_oleh]
+      properties:
+        disetujui_oleh:
+          type: string
+          maxLength: 120
+          example: Petugas Gudang
+    Problem:
+      type: object
+      description: Problem Details (RFC 9457)
+      required: [type, title, status, detail, instance]
+      properties:
+        type:
+          type: string
+          format: uri
+        title:
+          type: string
+        status:
+          type: integer
+        detail:
+          type: string
+        instance:
+          type: string
+        stok_tersedia:
+          type: integer
+          description: Hanya ada pada galat stok-tidak-cukup
+    ProblemValidasi:
+      allOf:
+        - $ref: '#/components/schemas/Problem'
+        - type: object
+          required: [errors]
+          properties:
+            errors:
+              type: object
+              description: Pesan galat per field
+              additionalProperties:
+                type: array
+                items:
+                  type: string
