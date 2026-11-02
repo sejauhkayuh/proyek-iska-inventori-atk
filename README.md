@@ -146,10 +146,10 @@ Isi kolom hasil setelah dijalankan.
 
 | Bidang | Penanggung jawab |
 | --- | --- |
-| Kontrak OpenAPI, Swagger UI, review kontrak | _(isi nama)_ |
-| Layanan Inventori: REST API dan feature test | _(isi nama)_ |
-| RabbitMQ, event, consumer Layanan Notifikasi | _(isi nama)_ |
-| Transactional outbox, dokumen analisis, slides | _(isi nama)_ |
+| Kontrak OpenAPI, Swagger UI, review kontrak | _Gilbert_ |
+| Layanan Inventori: REST API dan feature test | _Angga_ |
+| RabbitMQ, event, consumer Layanan Notifikasi | _Cindy_ |
+| Transactional outbox, dokumen analisis, slides | _Agnes_ |
 
 ## Catatan desain
 
