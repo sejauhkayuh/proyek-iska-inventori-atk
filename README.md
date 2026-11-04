@@ -123,17 +123,17 @@ Hasil yang diharapkan: consumer permintaan menampilkan "Dicatat" untuk permintaa
 stok menampilkan peringatan menipis (stok tersisa 3, minimum 5). Isi notifikasi bisa dilihat di tabel
 `log_notifikasi` pada Layanan Notifikasi.
 
-## Skenario uji
+## Hasil Pengujian
 
-Isi kolom hasil setelah dijalankan.
-
-| # | Skenario | Langkah | Yang diharapkan | Hasil |
-| --- | --- | --- | --- | --- |
-| 1 | RabbitMQ mati (outbox) | `sail stop rabbitmq` di inventori-atk, ajukan lalu setujui permintaan, nyalakan lagi (`sail start rabbitmq`) | API tetap 201/200; relay mencetak "Gagal menerbitkan"; setelah broker menyala pesan terkirim dan consumer mencatat | |
-| 2 | Pengiriman ulang | Kosongkan `dikirim_pada` pesan terakhir di tabel `outbox`, jalankan relay | Consumer menampilkan "Dilewati (duplikat)"; `log_notifikasi` tidak bertambah | |
-| 3 | Consumer mati | Matikan consumer, ajukan 3 permintaan, nyalakan lagi | Pesan menunggu di `notifikasi.permintaan` (Ready = 3), lalu terproses semua | |
-| 4 | Pesan rusak | Publish dari Management UI ke `atk.events` dengan routing key `permintaan.diajukan` dan payload `{"nomor":"PRM-001"}` | Pesan masuk `notifikasi.permintaan.dlq` | |
-| 5 | Stok tidak cukup | Setujui permintaan yang jumlahnya melebihi stok | 409 `stok-tidak-cukup`; stok dan status permintaan tidak berubah; outbox tidak bertambah | |
+| No. | Pengujian | Hasil |
+|---|---|---|
+| 1 | Feature test Layanan Inventori | 20 lulus (93 assertion) |
+| 2 | Feature test Layanan Notifikasi | 8 lulus (13 assertion) |
+| 3 | Ajukan permintaan (REST) | 201, nomor PRM-0002, status diajukan |
+| 4 | Isi tidak valid (REST) | 422 dengan Problem Details |
+| 5 | Pengujian 404 dan 409 | Lulus di feature test |
+| 6 | Event diterima consumer | Dicatat ke `log_notifikasi` |
+| 7 | Pengiriman ulang dari Outbox | Dilewati (duplikat), log tidak bertambah |
 
 ## Anggota dan pembagian tugas
 
